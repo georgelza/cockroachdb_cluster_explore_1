@@ -217,14 +217,16 @@ Lets look at another pattern. We now have 4 nodes, located in 4 racks, and we st
 
 Our nodes would have the `--locality=` configured as per below.
 
+```
 Node 1
-`--locality=rack=1`
+--locality=rack=1
 Node 2
-`--locality=rack=2`
+--locality=rack=2
 Node 3
-`--locality=rack=3`
+--locality=rack=3
 Node 4
-`--locality=rack=4`
+--locality=rack=4
+```
 
 And now we configure our cluster, This is the easy version, ;) we simply configure it with num_replicas=3. This will drive a even distribution of our data across our 4 nodes in the 4 racks, as we build out our data set.
 
@@ -237,14 +239,16 @@ Lets level up a bit now. But, what happens when business sky rockets and we grow
 
 Our 8 nodes are configures as:
 
+```
 Node 1 and 5
-`--locality=rack=1`
+--locality=rack=1
 Node 2 and 6
-`--locality=rack=2`
+--locality=rack=2
 Node 3 and 7
-`--locality=rack=3`
+--locality=rack=3
 Node 4 and 8
-`--locality=rack=4`
+--locality=rack=4
+```
 
 And now we configure our cluster, teling it how we want the distribution applied.
 
