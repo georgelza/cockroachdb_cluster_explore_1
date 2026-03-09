@@ -6,8 +6,8 @@
 -- Sets a cluster-wide replication factor of 3, with at least 1 replica
 -- guaranteed on each cloud provider (CP):
 --
---   +CP=aws    → roach1, roach2, roach3  (af-south-1 / az1, az2, az3)
---   +CP=google → roach4, roach5, roach6  (us-east1 / us-east1-b, us-east1-c, us-east1-d)
+--   +CP=aws    → roach1, roach2, roach3 / Region: af-south-1    / Zones: az1, az2, az3
+--   +CP=google → roach4, roach5, roach6 / Region: africa-south1 / Zones: africa-south1-a, africa-south1-b, africa-south1-c
 --
 -- The 3rd replica is placed freely by CockroachDB based on diversity rules.
 -- All databases, tables, and indexes inherit this zone config by default

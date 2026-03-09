@@ -9,14 +9,14 @@ services:
   # Only the HOST-side ports increment to avoid conflicts on the Docker host.
   #
   # Host Port Mapping:
-  #   Node    CP       Locality                 SQL (host)   HTTP (host)
-  #   ------  -------  ------------------       ----------   -----------
-  #   roach1  aws      af-south-1 / az1         26257        8080
-  #   roach2  aws      af-south-1 / az2         26258        8081
-  #   roach3  aws      af-south-1 / az3         26259        8082
-  #   roach4  google   us-east1   / us-east1-b  26260        8083
-  #   roach5  google   us-east1   / us-east1-c  26261        8084
-  #   roach6  google   us-east1   / us-east1-d  26262        8085
+  #   Node    CP       Region         Zone              SQL (host)   HTTP (host)
+  #   ------  -------  -------------  -----             ----------   -----------
+  #   roach1  aws      af-south-1     / az1             26257        8080
+  #   roach2  aws      af-south-1     / az2             26258        8081
+  #   roach3  aws      af-south-1     / az3             26259        8082
+  #   roach4  google   africa-south1  / africa-south1-a 26260        8083
+  #   roach5  google   africa-south1  / africa-south1-b 26261        8084
+  #   roach6  google   africa-south1  / africa-south1-c 26262        8085
   # ---------------------------------------------------------------------------
 
   roach1:
@@ -104,7 +104,7 @@ services:
       --listen-addr=roach4:26357
       --sql-addr=roach4:26257
       --insecure
-      --locality=CP=google,region=us-east1,zone=us-east1-b
+      --locality=CP=google,region=africa-south1,zone=africa-south1-a
       --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
 
   roach5:
@@ -126,7 +126,7 @@ services:
       --listen-addr=roach5:26357
       --sql-addr=roach5:26257
       --insecure
-      --locality=CP=google,region=us-east1,zone=us-east1-c
+      --locality=CP=google,region=africa-south1,zone=africa-south1-b
       --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
 
   roach6:
@@ -148,7 +148,7 @@ services:
       --listen-addr=roach6:26357
       --sql-addr=roach6:26257
       --insecure
-      --locality=CP=google,region=us-east1,zone=us-east1-d
+      --locality=CP=google,region=africa-south1,zone=africa-south1-c
       --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
 
   # ---------------------------------------------------------------------------

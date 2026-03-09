@@ -10,10 +10,12 @@ Now, before I get flamed, CockroachDB (also shorthand referred to as CRDB) is wi
 
 Now, full disclosure, some of the diagrams, and examples below come from [Cockroach Labs](https://www.cockroachlabs.com), some of it as extracts accross various blogs, YouTube videos I've watched.
 
-First, we'll just "play" with CRDB in a single node, just to get familiar with CRDB and then I'm going to simulate some clusters, 
+First, we'll just "play" with CRDB in a single node, just to get familiar with CRDB and then I'm going to simulate some clusters configurations.
 
-- the first being just a simple 6 node cluster, where we always want 3 copies of our data.
-- the second being a 6 node cluster, but we they are now 3 nodes at one Cloud provider and 3 at a second cloud provider.
+I provide example scripts for 2 cluster examples, 
+
+- a manual docker based pattern, deploying our cluster using individual scripts.
+- then for the second example we're using a docker-compose based pattern.
 
 Let's go.
 
@@ -81,19 +83,28 @@ show indexes from users;
 Ok, we've done the basics, now lets level up a bit here.
 
 
-## Data Replication
+## Cluster Concepts:
 
 A Cluster means nothing if it is just a set of nodes. Clusters are created to answer a specific requirement, namely: RAS (Reliability, availability, scalability), so lets go.
 
-
-### Level - Easy, Simply Replicate
-
+### Data Replication
 
 First, a concept, Replication factor, well, this simply means we want multiple copies of each block of data, a.k.a. replica's.
 
 First CockroachDB, specifies as a best practice, to always use replication factor=3, as a mininum.
 
 This simply mean, you need minimum 3 nodes, which implies each node will have a copy of every record. If you have more nodes, well then we start getting to the point where data is distributed evenly across the available nodes. And well this is the first, simplest configuration.
+
+### Data Distribution
+
+With this we control where the data actually is actually placed, by incorporating the actual location of the nodes, configured using `--locality`.
+
+
+## Cluster builds
+
+### Level - Easy, Simply Replicate
+
+So for our first example, we're just going to use replication, here we're using our `docker` based build, where we build 6 nodes, and specify we want 3 copies
 
 **Our nodes would look something like:**
 
@@ -123,21 +134,21 @@ ALTER RANGE default CONFIGURE ZONE USING
   num_replicas = 3;
 ```
 
-### Level - Fantastic, Replicate and Distribute
+### Level - Super, Replicate and Distribute
 
-Now CRDB's super power. You can tag your nodes, lets imagine you have 3 racks, and you're building a 9 node cluster (each rack will have 3 nodes installed in it). 
+Now CRDB's super power. You can tag your nodes. We can specify rboth eplication factor and locality, driving data placement and copies. Lets imagine you have 3 racks, and you're building a 9 node cluster (each rack will have 3 nodes installed in it). 
 
-In this circumstance if we just specified replication factor of 3 as per previously (best practice) we can get into the situation where all 3 replica's of our data is in the same rack... So how do we protect ourself from that, and this is where we get to the below.
+In this circumstance if we only specified replication factor of 3 as per above example (thus still following our best practice) we can get into the situation where all 3 replica's of our data is in the same rack... Not good. So how do we protect ourself from that, and this is where we get to `--locality=`.
 
-Well, when we create our nodes we now additionally specify the location for each node by using the `locality` property which takes a key:value string.
+For our 9 node cluster in our 3 racks, we now additionally specify `--locality=` for each node.
 
-- For Node 1, 4 and 7
+- For Nodes 1, 4 and 7
 `--locality=rack=1`
 
-- For Node 2, 5 and 8
+- For Nodes 2, 5 and 8
 `--locality=rack=2`
 
-- For Node 3, 6 and 9
+- For Nodes 3, 6 and 9
 `--locality=rack=3`
 
 **Our nodes definitions would look something like:**
@@ -163,7 +174,7 @@ docker run -d \
 ```
 
 ```bash
-# Node 2, see --locality=racke=2
+# Node 2, see --locality=rack=2
 docker run -d \
   --name=roach2 \
   --hostname=roach2 \
@@ -182,16 +193,71 @@ docker run -d \
     --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
 ```
 
-And we configure our cluster, specifying how we want the data replicated. In this case, one copy in each rack.
+Implying we have 3 nodes in 3 groupings, 3 in each rack.
+
+And now we configure our cluster, telling it how we want the configure data distribution. In this case, one copy in each rack.
 
 ```sql
 -- Again we say we want 3 replica's, but we now also say rack 1 must have 1 copy, rack 2 must have 1 and rack 3 must have 1
+-- This seems expensive when we only have 3 nodes as each node have a copy, but once we upgrade to 6, 9, 12 nodes this becomes very attractive. 
+-- It does imply we want to grow our cluster with 3 nodes every time.
 ALTER RANGE default CONFIGURE ZONE USING
   num_replicas = 3,
   constraints = '{"+rack=1": 1, "+rack=2": 1, "+rack=3": 1}';
 ```
 
-### Level - Amazing, Replicate and Geo Distribute
+<img src="blog-doc/diagrams/Superlab-5.1-6Nodes.png" alt="Our Build" width="500" height="350">
+
+
+### Level - Awesome, Replicate and Distribute
+
+Lets look at another pattern. We now have 4 nodes, located in 4 racks, and we still following the best practice of 3 replica's. 
+
+Our nodes would have the `--locality=` configured as per below.
+
+Node 1
+`--locality=rack=1`
+Node 2
+`--locality=rack=2`
+Node 3
+`--locality=rack=4`
+Node 4
+`--locality=rack=5`
+
+And now we configure our cluster, This is the easy version, ;) we simply configure it with num_replicas=3. This will drive a even distribution of our data across our 4 nodes in the 4 racks, as we build out our data set.
+
+```sql
+ALTER RANGE default CONFIGURE ZONE USING
+  num_replicas = 3;
+```
+
+Lets level up a bit now. But, what happens when business sky rockets and we grow our cluster from 4 nodes to 8, other words 2 nodes per rack. We still want 3 copies, but never want to get into the situation where we have 2 copies/replica's to co-exist in the same rack. 
+
+Our 8 nodes are configures as:
+
+Node 1 and 5
+`--locality=rack=1`
+Node 2 and 6
+`--locality=rack=2`
+Node 3 and 7
+`--locality=rack=3`
+Node 4 and 8
+`--locality=rack=4`
+
+And now we configure our cluster, teling it how we want the distribution applied.
+
+```sql
+ALTER RANGE default CONFIGURE ZONE USING
+  num_replicas = 3,
+  constraints = '{"+rack1": 1, "+rack2": 1, "+rack3": 1, "+rack4": 1}';
+```
+
+CockroachDB interprets this as **at most 1 replica per rack** when the sum of constraints exceeds `num_replicas`. Since 4 > 3, it will place exactly 1 replica in 3 of the 4 racks, never 2 in the same rack. ✅
+
+<img src="blog-doc/diagrams/Superlab-5.1-8Nodes.png" alt="Our Build" width="700" height="350">
+
+
+### Level - Amazing, Replicate and Distribute across Cloud Providers
 
 Now, imagine if we had agreement with two cloud providers and we wanted cluster distributed/stretched, say across AWS and Google, each having 3 physical locations, what AWS call Availibility Zones (AZ's) and what Google calls Zone, we'll go with zone...
 
@@ -201,49 +267,29 @@ We start, again by specifying the `locality` configuration for each node, but th
 - region, Region of the data centers
 - zone, Zone as Google calls it, AZ as AWS calls it, basically the data center grouping.
 
-*locality setting of our 6 cluster nodes, we can easily change this to 12, and have 2 nodes per local*
+Our 6 nodes are now onfigured as:
 
-- For AWS - az1 nodes
+- For AWS - az1 located nodes
 `--locality=CP=aws,region=af-south-1,zone=az1`
 
-- For AWS - az2 nodes
+- For AWS - az2 located odes
 `--locality=CP=aws,region=af-south-1,zone=az2`
 
-- For AWS - az3 nodes
+- For AWS - az3 locatednodes
 `--locality=CP=aws,region=af-south-1,zone=az3`
 
-- For Google - us-east1-b nodes
-`--locality=CP=google,region=us-east1,zone=us-east1-b`
+- For Google - africa-south1-a located nodes
+`--locality=CP=google,region=africa-south1,zone=africa-south1-a`
 
-- For Google - us-east1-c nodes
-`--locality=CP=google,region=us-east1,zone=us-east1-c`
+- For Google - africa-south1-b located nodes
+`--locality=CP=google,region=africa-south1,zone=africa-south1-b`
 
-- For Google - us-east1-d nodes
-`--locality=CP=google,region=us-east1,zone=us-east1-d`
+- For Google - africa-south1-c located nodes
+`--locality=CP=google,region=africa-south1,zone=africa-south1-c`
 
 **Our nodes definitions would look something like:**
 
-```bash
-#0.node_1.sh
-docker run -d \
-  --name=roach1 \
-  --hostname=roach1 \
-  --net=roachnet \
-  -p 26257:26257 \
-  -p 8080:8080 \
-  -v "./data/roach1:/cockroach/cockroach-data" \
-  -v "./sql:/cockroach/sql:ro" \
-  cockroachdb/cockroach:latest-v25.2 start \
-    --advertise-addr=roach1:26357 \
-    --http-addr=roach1:8080 \
-    --listen-addr=roach1:26357 \
-    --sql-addr=roach1:26257 \
-    --insecure \
-    --locality=CP=aws,region=af-south-1,zone=az1 \
-    --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
-```
-
-Or, below in `docker-compose.yaml` format
+For these examples we'll be using our `docker-compose.yaml` deployment pattern, only showing nodes 1,2, 4 and 5
 
 ```yaml
   roach1:
@@ -267,16 +313,88 @@ Or, below in `docker-compose.yaml` format
       --insecure
       --locality=CP=aws,region=af-south-1,zone=az1
       --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
+  roach2:
+    image: cockroachdb/cockroach:latest-v25.2
+    hostname: roach2
+    container_name: roach2
+    networks:
+      - roachnet
+    ports:
+      - "26258:26257"   # host:container — SQL
+      - "8081:8080"     # host:container — Admin UI
+    volumes:
+      - ./data/roach2:/cockroach/cockroach-data
+      - ./sql:/cockroach/sql:ro
+    command: >
+      start
+      --advertise-addr=roach2:26357
+      --http-addr=roach2:8080
+      --listen-addr=roach2:26357
+      --sql-addr=roach2:26257
+      --insecure
+      --locality=CP=aws,region=af-south-1,zone=az2
+      --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
+  
+  roach4:
+    image: cockroachdb/cockroach:latest-v25.2
+    hostname: roach4
+    container_name: roach4
+    networks:
+      - roachnet
+    ports:
+      - "26260:26257"   # host:container — SQL
+      - "8083:8080"     # host:container — Admin UI
+    volumes:
+      - ./data/roach4:/cockroach/cockroach-data
+      - ./sql:/cockroach/sql:ro
+    command: >
+      start
+      --advertise-addr=roach4:26357
+      --http-addr=roach4:8080
+      --listen-addr=roach4:26357
+      --sql-addr=roach4:26257
+      --insecure
+      --locality=CP=google,region=africa-south1,zone=africa-south1-a
+      --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
+
+  roach5:
+    image: cockroachdb/cockroach:latest-v25.2
+    hostname: roach5
+    container_name: roach5
+    networks:
+      - roachnet
+    ports:
+      - "26261:26257"   # host:container — SQL
+      - "8084:8080"     # host:container — Admin UI
+    volumes:
+      - ./data/roach5:/cockroach/cockroach-data
+      - ./sql:/cockroach/sql:ro
+    command: >
+      start
+      --advertise-addr=roach5:26357
+      --http-addr=roach5:8080
+      --listen-addr=roach5:26357
+      --sql-addr=roach5:26257
+      --insecure
+      --locality=CP=google,region=africa-south1,zone=africa-south1-b
+      --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
 ```
 
-And we configure our cluster, specifying how we want the data replicated. In the below, we define that we want at least one copy of our data in AWS and one copy in Google. We can go more prescriptive at cluster level by specifying region and/or zone also, which makes sense for a larger cluster, or less Region/Zone's defined.
+And now we configure our cluster, teling it how we want the distribution applied. In the below, we define that we want at least one copy of our data in AWS and one copy in Google. 
 
 ```sql
--- Again we stay we want 3 replica's, but we now say at least one must be in CP=aws and one in CP=google, and well, the 3rd can be in either.
+-- Again we stay we want 3 replica's, 
+-- but we now say at least one must be in CP=aws and one in CP=google, 
+-- and well, the 3rd can be in either.
 ALTER RANGE default CONFIGURE ZONE USING
   num_replicas = 3,
   constraints = '{"+CP=aws": 1, "+CP=google": 1}';
 ```
+
+As we have 3 nodes in each Cloud provider the copies will be distributed across the nodes, across the zones. We can go more prescriptive at cluster level by specifying region and/or zone also, which makes sense for a larger cluster, or less Region/Zone's defined.
+
+<img src="blog-doc/diagrams/Superlab-5.1-6Nodes-multicloud.png" alt="Our Build" width="700" height="350">
+
 
 ## Cluster Build time
 
@@ -301,16 +419,17 @@ cd docker
 ./4.node_4.sh
 ./5.node_5.sh
 ./6.node_6.sh
-./7.init.sh
-./8.ha_proxy.sh
+./7.init_cluster.sh
+./8.config_replication.sh
+./9.ha_proxy.sh
 ```
 
-After executing the above 8 scripts we will have a 6 node CockroachDB cluster, where we can connect directly to a specified node using the below command.
+After executing the above 9 scripts we will have a 6 node CockroachDB cluster, where we can connect directly to a specified node using the below command.
 
 ```bash
 docker exec -it roach1 ./cockroach sql --host=roach1:26257 --insecure
 # or by executing
-./9.sql_connect.sh
+./10.sql_connect.sh
 ```
 
 or we can access our custer via [HAProxy](https://www.haproxy.org) service (which acts as a load balancer). 
@@ -350,7 +469,7 @@ make run
 
 ```bash
 # connect to our cluster, using cockroach sql cli
-./9.sql_connect.sh
+./10.sql_connect.sh
 
 # or if you executed docker-compose build
 make crsql
@@ -358,16 +477,15 @@ make crsql
 
 ```sql
 SELECT * FROM crdb_internal.gossip_nodes;
-
-                                                         
+                                                
   node_id | network |   address    | advertise_address | sql_network | sql_address  | advertise_sql_address | attrs |                 locality                  | cluster_name | server_version | build_tag |         started_at         | is_live | ranges | leases
 ----------+---------+--------------+-------------------+-------------+--------------+-----------------------+-------+-------------------------------------------+--------------+----------------+-----------+----------------------------+---------+--------+---------
-        1 | tcp     | roach1:26357 | roach1:26357      | tcp         | roach1:26257 | roach1:26257          | []    | CP=aws,region=af-south-1,zone=az1          |              | 25.2           | v25.2.13  | 2026-03-08 14:47:36.808961 |    t    |     62 |     14
-        2 | tcp     | roach2:26357 | roach2:26357      | tcp         | roach2:26257 | roach2:26257          | []    | CP=aws,region=af-south-1,zone=az2          |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.760356 |    t    |     62 |     13
-        3 | tcp     | roach4:26357 | roach4:26357      | tcp         | roach4:26257 | roach4:26257          | []    | CP=google,region=us-east1,zone=us-east1-b |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.766291 |    t    |     61 |     12
-        4 | tcp     | roach3:26357 | roach3:26357      | tcp         | roach3:26257 | roach3:26257          | []    | CP=aws,region=af-south-1,zone=az3          |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.766723 |    t    |     63 |     14
-        5 | tcp     | roach5:26357 | roach5:26357      | tcp         | roach5:26257 | roach5:26257          | []    | CP=google,region=us-east1,zone=us-east1-c |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.771678 |    t    |     61 |     11
-        6 | tcp     | roach6:26357 | roach6:26357      | tcp         | roach6:26257 | roach6:26257          | []    | CP=google,region=us-east1,zone=us-east1-d |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.771079 |    t    |     61 |     12
+        1 | tcp     | roach1:26357 | roach1:26357      | tcp         | roach1:26257 | roach1:26257          | []    | rack=1    |              | 25.2           | v25.2.13  | 2026-03-08 14:47:36.808961 |    t    |     62 |     14
+        2 | tcp     | roach2:26357 | roach2:26357      | tcp         | roach2:26257 | roach2:26257          | []    | rack=2    |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.760356 |    t    |     62 |     13
+        3 | tcp     | roach4:26357 | roach4:26357      | tcp         | roach4:26257 | roach4:26257          | []    | rack=3    |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.766291 |    t    |     61 |     12
+        4 | tcp     | roach3:26357 | roach3:26357      | tcp         | roach3:26257 | roach3:26257          | []    | rack=1    |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.766723 |    t    |     63 |     14
+        5 | tcp     | roach5:26357 | roach5:26357      | tcp         | roach5:26257 | roach5:26257          | []    | rack=2    |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.771678 |    t    |     61 |     11
+        6 | tcp     | roach6:26357 | roach6:26357      | tcp         | roach6:26257 | roach6:26257          | []    | rack=3    |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.771079 |    t    |     61 |     12
 (6 rows)
 
 Time: 3ms total (execution 2ms / network 1ms)
@@ -375,242 +493,35 @@ Time: 3ms total (execution 2ms / network 1ms)
 root@roach1:26257/demog>   
 ```
 
-
 **Results in a Cluster:**
 
 ```
-Node        CP          Region      Zone
+Node        CP          Region          Zone
 
-roach1      aws         af-south-1  az1
-roach2      aws         af-south-1  az2
-roach3      aws         af-south-1  az3
-roach4      google      us-east1    us-east1-b
-roach5      google      us-east1    us-east1-c
-roach6      google      us-east1    us-east1-d
-```
-
-With the above we get to the point where we can build a single database that looks/distributed something like the following diagram (All credit to Cockroach Labs for this).
-
-<img src="blog-doc/diagrams/crdb_distributed.png" alt="Our Build" width="650" height="350">
-
-
-
-## Data Placement Example
-
-Now more magic. Let's create a geographical distributed table, with data locality rules applied.
-You would have noticed that in both the docker and docker-compose examples our `--locality` property had a little bit more than just a single key:value pair specified.
-
-What we're going to now do below is create a table, and pin the data based on a column value, namely `country=za` or `country=us`, all ZA data will be located in our AWS nodes and all US data will be placed on our Google located nodes.
-
-```sql
--- 1. Create the Table
-CREATE TABLE person (
-    id          UUID          NOT NULL DEFAULT gen_random_uuid(),
-    first_name  VARCHAR(100)  NOT NULL,
-    last_name   VARCHAR(100)  NOT NULL,
-    email       VARCHAR(255),
-    phone       VARCHAR(50),
-
-    -- Address fields
-    street      VARCHAR(255),
-    city        VARCHAR(100),
-    state       VARCHAR(100),
-    postal_code VARCHAR(20),
-    country     VARCHAR(2)    NOT NULL,   -- ISO-3166 alpha-2: 'ZA', 'US', etc.
-
-    created_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
-    updated_at  TIMESTAMPTZ   NOT NULL DEFAULT now(),
-
-    PRIMARY KEY (country, id)           -- country MUST be part of the PK for partitioning
-);
--- 2. Partition the Table by Country
-ALTER TABLE person PARTITION BY LIST (country) (
-    PARTITION za VALUES IN ('ZA'),
-    PARTITION us VALUES IN ('US'),
-    PARTITION other VALUES IN (DEFAULT)
-);
-
--- 3. Pin Partitions to Regions via Zone Configs
--- ZA data → af-south-1 (your AWS nodes)
-ALTER PARTITION za OF TABLE person
-    CONFIGURE ZONE USING
-        num_replicas = 3,
-        constraints  = '[+region=af-south-1]',
-        lease_preferences = '[[+region=af-south-1]]';
-
--- US data → us-east1 (your Google nodes)
-ALTER PARTITION us OF TABLE person
-    CONFIGURE ZONE USING
-        num_replicas = 3,
-        constraints  = '[+region=us-east1]',
-        lease_preferences = '[[+region=us-east1]]';
-
--- Everything else — no placement constraint, spread freely
-ALTER PARTITION other OF TABLE person
-    CONFIGURE ZONE USING
-        num_replicas = 3;
-
--- 4. Do the Same for the Secondary Indexes
--- Every index on the table also needs to be partitioned, 
--- otherwise CockroachDB will store index data without placement constraints and your data residency guarantees break.
---
--- Example: index on email for lookups
-CREATE INDEX idx_person_email ON person (country, email);  -- country prefix required
-
-ALTER INDEX person@idx_person_email PARTITION BY LIST (country) (
-    PARTITION za VALUES IN ('ZA'),
-    PARTITION us VALUES IN ('US'),
-    PARTITION other VALUES IN (DEFAULT)
-);
-
-ALTER PARTITION za OF INDEX person@idx_person_email
-    CONFIGURE ZONE USING constraints = '[+region=af-south-1]',
-                         lease_preferences = '[[+region=af-south-1]]';
-
-ALTER PARTITION us OF INDEX person@idx_person_email
-    CONFIGURE ZONE USING constraints = '[+region=us-east1]',
-                         lease_preferences = '[[+region=us-east1]]';
-
-```
-
-### Lets check everything is working
-
-```sql
--- Check partition definitions
-SHOW PARTITIONS FROM TABLE person;
-```
-
-```                                                                                  
-  database_name | table_name | partition_name | parent_partition | column_names |       index_name        | partition_value |                 zone_config                  |               full_zone_config
-----------------+------------+----------------+------------------+--------------+-------------------------+-----------------+----------------------------------------------+-----------------------------------------------
-  demog         | person     | other          | NULL             | country      | person@idx_person_email | (DEFAULT)       | NULL                                         | range_min_bytes = 134217728,
-                |            |                |                  |              |                         |                 |                                              | range_max_bytes = 536870912,
-                |            |                |                  |              |                         |                 |                                              | gc.ttlseconds = 14400,
-                |            |                |                  |              |                         |                 |                                              | num_replicas = 3,
-                |            |                |                  |              |                         |                 |                                              | constraints = '{+CP=aws: 1, +CP=google: 1}',
-                |            |                |                  |              |                         |                 |                                              | lease_preferences = '[]'
-  demog         | person     | other          | NULL             | country      | person@person_pkey      | (DEFAULT)       | num_replicas = 3                             | range_min_bytes = 134217728,
-                |            |                |                  |              |                         |                 |                                              | range_max_bytes = 536870912,
-                |            |                |                  |              |                         |                 |                                              | gc.ttlseconds = 14400,
-                |            |                |                  |              |                         |                 |                                              | num_replicas = 3,
-                |            |                |                  |              |                         |                 |                                              | constraints = '[]',
-                |            |                |                  |              |                         |                 |                                              | lease_preferences = '[]'
-  demog         | person     | us             | NULL             | country      | person@idx_person_email | ('US')          | constraints = '[+region=us-east1]',          | range_min_bytes = 134217728,
-                |            |                |                  |              |                         |                 | lease_preferences = '[[+region=us-east1]]'   | range_max_bytes = 536870912,
-                |            |                |                  |              |                         |                 |                                              | gc.ttlseconds = 14400,
-                |            |                |                  |              |                         |                 |                                              | num_replicas = 3,
-                |            |                |                  |              |                         |                 |                                              | constraints = '[+region=us-east1]',
-                |            |                |                  |              |                         |                 |                                              | lease_preferences = '[[+region=us-east1]]'
-  demog         | person     | us             | NULL             | country      | person@person_pkey      | ('US')          | num_replicas = 3,                            | range_min_bytes = 134217728,
-                |            |                |                  |              |                         |                 | constraints = '[+region=us-east1]',          | range_max_bytes = 536870912,
-                |            |                |                  |              |                         |                 | lease_preferences = '[[+region=us-east1]]'   | gc.ttlseconds = 14400,
-                |            |                |                  |              |                         |                 |                                              | num_replicas = 3,
-                |            |                |                  |              |                         |                 |                                              | constraints = '[+region=us-east1]',
-                |            |                |                  |              |                         |                 |                                              | lease_preferences = '[[+region=us-east1]]'
-  demog         | person     | za             | NULL             | country      | person@idx_person_email | ('ZA')          | constraints = '[+region=af-south-1]',        | range_min_bytes = 134217728,
-                |            |                |                  |              |                         |                 | lease_preferences = '[[+region=af-south-1]]' | range_max_bytes = 536870912,
-                |            |                |                  |              |                         |                 |                                              | gc.ttlseconds = 14400,
-                |            |                |                  |              |                         |                 |                                              | num_replicas = 3,
-                |            |                |                  |              |                         |                 |                                              | constraints = '[+region=af-south-1]',
-                |            |                |                  |              |                         |                 |                                              | lease_preferences = '[[+region=af-south-1]]'
-  demog         | person     | za             | NULL             | country      | person@person_pkey      | ('ZA')          | num_replicas = 3,                            | range_min_bytes = 134217728,
-                |            |                |                  |              |                         |                 | constraints = '[+region=af-south-1]',        | range_max_bytes = 536870912,
-                |            |                |                  |              |                         |                 | lease_preferences = '[[+region=af-south-1]]' | gc.ttlseconds = 14400,
-                |            |                |                  |              |                         |                 |                                              | num_replicas = 3,
-                |            |                |                  |              |                         |                 |                                              | constraints = '[+region=af-south-1]',
-                |            |                |                  |              |                         |                 |                                              | lease_preferences = '[[+region=af-south-1]]'
-(6 rows)
-```
-
-```sql
--- Check zone configs
-SHOW ZONE CONFIGURATION FOR PARTITION za OF TABLE person;
-```
-
-```
-             target            |                     raw_config_sql
--------------------------------+----------------------------------------------------------
-  PARTITION za OF TABLE person | ALTER PARTITION za OF TABLE person CONFIGURE ZONE USING
-                               |     range_min_bytes = 134217728,
-                               |     range_max_bytes = 536870912,
-                               |     gc.ttlseconds = 14400,
-                               |     num_replicas = 3,
-                               |     constraints = '[+region=af-south-1]',
-                               |     lease_preferences = '[[+region=af-south-1]]'
-(1 row)
-```
-
-```sql
-SHOW ZONE CONFIGURATION FOR PARTITION us OF TABLE person;
-```
-
-```
-             target            |                     raw_config_sql
--------------------------------+----------------------------------------------------------
-  PARTITION us OF TABLE person | ALTER PARTITION us OF TABLE person CONFIGURE ZONE USING
-                               |     range_min_bytes = 134217728,
-                               |     range_max_bytes = 536870912,
-                               |     gc.ttlseconds = 14400,
-                               |     num_replicas = 3,
-                               |     constraints = '[+region=us-east1]',
-                               |     lease_preferences = '[[+region=us-east1]]'
-(1 row)
-```
-
-**Let insert some data**
-```sql
-INSERT INTO person (first_name, last_name, email, phone, street, city, state, postal_code, country)
-VALUES
-    -- 6 ZA rows → partition: za → AWS af-south-1
-    ('Sipho',    'Dlamini',   'sipho.dlamini@example.co.za',   '+27-11-555-0101', '12 Mandela Street',      'Johannesburg', 'Gauteng',     '2000', 'ZA'),
-    ('Thandi',   'Nkosi',     'thandi.nkosi@example.co.za',    '+27-21-555-0102', '4 Buitenkant Street',    'Cape Town',    'Western Cape','8001', 'ZA'),
-    ('Bongani',  'Zulu',      'bongani.zulu@example.co.za',    '+27-31-555-0103', '88 Joe Slovo Drive',     'Durban',       'KwaZulu-Natal','4001','ZA'),
-    ('Ayanda',   'Mokoena',   'ayanda.mokoena@example.co.za',  '+27-12-555-0104', '3 Church Street',        'Pretoria',     'Gauteng',     '0002', 'ZA'),
-    ('Lerato',   'Sithole',   'lerato.sithole@example.co.za',  '+27-51-555-0105', '19 Aliwal Street',       'Bloemfontein', 'Free State',  '9301', 'ZA'),
-    ('Kagiso',   'Mahlangu',  'kagiso.mahlangu@example.co.za', '+27-13-555-0106', '7 Kerk Street',          'Nelspruit',    'Mpumalanga',  '1200', 'ZA'),
-
-    -- 4 US rows → partition: us → Google us-east1
-    ('James',    'Carter',    'james.carter@example.com',      '+1-212-555-0201', '350 Fifth Avenue',       'New York',     'NY',          '10118','US'),
-    ('Maria',    'Gonzalez',  'maria.gonzalez@example.com',    '+1-305-555-0202', '1200 Brickell Avenue',   'Miami',        'FL',          '33131','US'),
-    ('Tyler',    'Brooks',    'tyler.brooks@example.com',      '+1-312-555-0203', '233 S Wacker Drive',     'Chicago',      'IL',          '60606','US'),
-    ('Aisha',    'Washington','aisha.washington@example.com',  '+1-404-555-0204', '100 Peachtree Street NW','Atlanta',      'GA',          '30303','US');
-
-
---  After inserting rows, check replica placement**
-SHOW RANGES FROM TABLE person WITH DETAILS;
-```
-
-```
-        start_key       |      end_key       | range_id |       range_size_mb       | lease_holder |           lease_holder_locality           | replicas |                                                          replica_localities                                                           | voting_replicas | non_voting_replicas | learner_replicas |    split_enforced_until    | range_size |                                                                                                     span_stats
-------------------------+--------------------+----------+---------------------------+--------------+-------------------------------------------+----------+---------------------------------------------------------------------------------------------------------------------------------------+-----------------+---------------------+------------------+----------------------------+------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  <before:/Table/107/4> | …/1/"US"           |       79 |                         0 |            1 | CP=aws,region=af-south-1,zone=az1         | {1,3,5}  | {"CP=aws,region=af-south-1,zone=az1","CP=google,region=us-east1,zone=us-east1-d","CP=aws,region=af-south-1,zone=az2"}                 | {3,1,5}         | {}                  | {}               | 2026-03-08 16:05:00.470498 |          0 | {"approximate_disk_bytes": 50254, "intent_bytes": 0, "intent_count": 0, "key_bytes": 0, "key_count": 0, "live_bytes": 0, "live_count": 0, "sys_bytes": 3030, "sys_count": 10, "val_bytes": 0, "val_count": 0}
-  …/1/"US"              | …/1/"US"/PrefixEnd |       97 | 0.00067600000000000000000 |            3 | CP=google,region=us-east1,zone=us-east1-d | {3,4,6}  | {"CP=google,region=us-east1,zone=us-east1-d","CP=google,region=us-east1,zone=us-east1-c","CP=google,region=us-east1,zone=us-east1-b"} | {3,4,6}         | {}                  | {}               | NULL                       |        676 | {"approximate_disk_bytes": 18000, "intent_bytes": 0, "intent_count": 0, "key_bytes": 160, "key_count": 4, "live_bytes": 676, "live_count": 4, "sys_bytes": 769, "sys_count": 7, "val_bytes": 516, "val_count": 4}
-  …/1/"US"/PrefixEnd    | …/1/"ZA"           |       98 |                         0 |            4 | CP=google,region=us-east1,zone=us-east1-c | {3,4,5}  | {"CP=google,region=us-east1,zone=us-east1-d","CP=google,region=us-east1,zone=us-east1-c","CP=aws,region=af-south-1,zone=az2"}         | {3,4,5}         | {}                  | {}               | NULL                       |          0 | {"approximate_disk_bytes": 30392, "intent_bytes": 0, "intent_count": 0, "key_bytes": 0, "key_count": 0, "live_bytes": 0, "live_count": 0, "sys_bytes": 400, "sys_count": 7, "val_bytes": 0, "val_count": 0}
-  …/1/"ZA"              | …/1/"ZA"/PrefixEnd |       95 |  0.0010640000000000000000 |            2 | CP=aws,region=af-south-1,zone=az3         | {1,2,5}  | {"CP=aws,region=af-south-1,zone=az1","CP=aws,region=af-south-1,zone=az3","CP=aws,region=af-south-1,zone=az2"}                         | {2,1,5}         | {}                  | {}               | NULL                       |       1064 | {"approximate_disk_bytes": 59195, "intent_bytes": 0, "intent_count": 0, "key_bytes": 241, "key_count": 6, "live_bytes": 1064, "live_count": 6, "sys_bytes": 1142, "sys_count": 8, "val_bytes": 823, "val_count": 6}
-  …/1/"ZA"/PrefixEnd    | …/2                |       96 |                         0 |            3 | CP=google,region=us-east1,zone=us-east1-d | {3,4,5}  | {"CP=google,region=us-east1,zone=us-east1-d","CP=google,region=us-east1,zone=us-east1-c","CP=aws,region=af-south-1,zone=az2"}         | {3,4,5}         | {}                  | {}               | NULL                       |          0 | {"approximate_disk_bytes": 30392, "intent_bytes": 0, "intent_count": 0, "key_bytes": 0, "key_count": 0, "live_bytes": 0, "live_count": 0, "sys_bytes": 437, "sys_count": 7, "val_bytes": 0, "val_count": 0}
-  …/2                   | …/2/"US"           |       99 |                         0 |            3 | CP=google,region=us-east1,zone=us-east1-d | {3,4,5}  | {"CP=google,region=us-east1,zone=us-east1-d","CP=google,region=us-east1,zone=us-east1-c","CP=aws,region=af-south-1,zone=az2"}         | {3,4,5}         | {}                  | {}               | 2026-03-08 16:12:02.294434 |          0 | {"approximate_disk_bytes": 30392, "intent_bytes": 0, "intent_count": 0, "key_bytes": 0, "key_count": 0, "live_bytes": 0, "live_count": 0, "sys_bytes": 591, "sys_count": 7, "val_bytes": 0, "val_count": 0}
-  …/2/"US"              | …/2/"US"/PrefixEnd |      103 | 0.00029400000000000000000 |            3 | CP=google,region=us-east1,zone=us-east1-d | {3,4,6}  | {"CP=google,region=us-east1,zone=us-east1-d","CP=google,region=us-east1,zone=us-east1-c","CP=google,region=us-east1,zone=us-east1-b"} | {3,4,6}         | {}                  | {}               | NULL                       |        294 | {"approximate_disk_bytes": 18000, "intent_bytes": 0, "intent_count": 0, "key_bytes": 274, "key_count": 4, "live_bytes": 294, "live_count": 4, "sys_bytes": 769, "sys_count": 7, "val_bytes": 20, "val_count": 4}
-  …/2/"US"/PrefixEnd    | …/2/"ZA"           |      104 |                         0 |            3 | CP=google,region=us-east1,zone=us-east1-d | {3,4,5}  | {"CP=google,region=us-east1,zone=us-east1-d","CP=google,region=us-east1,zone=us-east1-c","CP=aws,region=af-south-1,zone=az2"}         | {3,4,5}         | {}                  | {}               | NULL                       |          0 | {"approximate_disk_bytes": 16545, "intent_bytes": 0, "intent_count": 0, "key_bytes": 0, "key_count": 0, "live_bytes": 0, "live_count": 0, "sys_bytes": 344, "sys_count": 6, "val_bytes": 0, "val_count": 0}
-  …/2/"ZA"              | …/2/"ZA"/PrefixEnd |      101 | 0.00045300000000000000000 |            1 | CP=aws,region=af-south-1,zone=az1         | {1,2,5}  | {"CP=aws,region=af-south-1,zone=az1","CP=aws,region=af-south-1,zone=az3","CP=aws,region=af-south-1,zone=az2"}                         | {1,2,5}         | {}                  | {}               | NULL                       |        453 | {"approximate_disk_bytes": 59195, "intent_bytes": 0, "intent_count": 0, "key_bytes": 423, "key_count": 6, "live_bytes": 453, "live_count": 6, "sys_bytes": 1142, "sys_count": 8, "val_bytes": 30, "val_count": 6}
-  …/2/"ZA"/PrefixEnd    | …/3                |      102 |                         0 |            3 | CP=google,region=us-east1,zone=us-east1-d | {3,4,5}  | {"CP=google,region=us-east1,zone=us-east1-d","CP=google,region=us-east1,zone=us-east1-c","CP=aws,region=af-south-1,zone=az2"}         | {3,4,5}         | {}                  | {}               | NULL                       |          0 | {"approximate_disk_bytes": 0, "intent_bytes": 0, "intent_count": 0, "key_bytes": 0, "key_count": 0, "live_bytes": 0, "live_count": 0, "sys_bytes": 339, "sys_count": 6, "val_bytes": 0, "val_count": 0}
-  …/3                   | <after:/Max>       |      100 |                         0 |            3 | CP=google,region=us-east1,zone=us-east1-d | {3,4,5}  | {"CP=google,region=us-east1,zone=us-east1-d","CP=google,region=us-east1,zone=us-east1-c","CP=aws,region=af-south-1,zone=az2"}         | {3,4,5}         | {}                  | {}               | NULL                       |          0 | {"approximate_disk_bytes": 0, "intent_bytes": 0, "intent_count": 0, "key_bytes": 0, "key_count": 0, "live_bytes": 0, "live_count": 0, "sys_bytes": 405, "sys_count": 6, "val_bytes": 0, "val_count": 0}
-(11 rows)
+roach1      aws         af-south-1      az1
+roach2      aws         af-south-1      az2
+roach3      aws         af-south-1      az3
+roach4      google      africa-south1   africa-south1-a
+roach5      google      africa-south1   africa-south1-b
+roach6      google      africa-south1   africa-south1-c
 ```
 
 
 ## Summary / Conclusion
 
-- You can use CockroachDB to simply replicate data across multiple physical nodes to ensure data our previously mentioned concept RAS (Reliability, Scalability, Avalability), or
+So... We can deploy a simple highly available cluster, localised in a datacenter, we can go one level up and distribute our cluster across racks (using `--locality=rack=#`) or using the same "rack" concept, but now distributed across AWS AZ's or Google Zones, by labelling the nodes as say `--locality=zone=#`
 
-- You can use CockroachDB to do provide oyo with RAS while at the same time allowing you to define data placement to comply with things like data Governance, i.e. GDPR based, or performance (data closer to the specific user base). Note: For Geo pinned clusters, the tables critically dependant on the table partitioning, matching the cluster configuration, if you havent noticed.
-
+Next up was a deployment where we deployed across multiple cloud providers. Here we again had a 6 node cluster deployed, with 3 nodes in AWS and 3 nodes in Google, and specified that we at minimum wanted each cloud provider to have at least 1 copy of each block of data.
 
 CockroachDB, pretty amazing platform if you ask me, and we've just touched the surface. 
-
 
 ## THE END
 
 And like that we’re done with our little trip down another Rabbit Hole, Till next time. 
+
+So, whats planned for part 2, you may ask, considering what we've already shown above (amazing level of HA/RAS,). 
+
+Hmm, lets see, what about adding data placement rules based on the value of a column. The first step in adhering to data governance (controlling data locality) as imposed by policies like GDRP by the European Union or POPI by South Africa. Using this concept does not only have to be governance based, it could also be utilised to place specific data close to the user base, i.e.: across multiple AWS regions, to provide region failure protection by having a copy in a second region, but at the same time keep a copy close to the primary user locality.
 
 Thanks for following. 
 

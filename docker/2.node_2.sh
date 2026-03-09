@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # https://www.cockroachlabs.com/docs/stable/start-a-local-cluster-in-docker-mac
 docker run -d \
   --name=roach2 \
@@ -13,5 +15,7 @@ docker run -d \
     --listen-addr=roach2:26357 \
     --sql-addr=roach2:26257 \
     --insecure \
-    --locality=CP=aws,region=af-south-1,zone=az2 \
+    --locality=rack=2 \
     --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
+
+echo "✅ Node 2 deployed."

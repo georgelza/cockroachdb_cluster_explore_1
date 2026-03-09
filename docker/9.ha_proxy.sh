@@ -1,3 +1,5 @@
+#!/bin/bash
+
 docker run -d \
   --name=haproxy \
   --hostname=haproxy \
@@ -7,4 +9,6 @@ docker run -d \
   -v "./conf/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro" \
   haproxy:latest
   
-  # docker exec -it roach1 ./cockroach sql --host=haproxy:26000 --insecure
+  echo "✅ HAProxy deployed."
+
+    # docker exec -it roach1 ./cockroach sql --host=haproxy:26000 --insecure
