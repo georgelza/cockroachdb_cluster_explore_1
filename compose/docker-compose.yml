@@ -1,0 +1,206 @@
+services:
+  # ---------------------------------------------------------------------------
+  # CockroachDB Nodes
+  # Internal ports are always the same on every container:
+  #   SQL  : 26257   (--sql-addr)
+  #   RPC  : 26357   (--listen-addr / --advertise-addr)
+  #   HTTP : 8080    (--http-addr)
+  #
+  # Only the HOST-side ports increment to avoid conflicts on the Docker host.
+  #
+  # Host Port Mapping:
+  #   Node    CP       Locality                 SQL (host)   HTTP (host)
+  #   ------  -------  ------------------       ----------   -----------
+  #   roach1  aws      af-south-1 / az1         26257        8080
+  #   roach2  aws      af-south-1 / az2         26258        8081
+  #   roach3  aws      af-south-1 / az3         26259        8082
+  #   roach4  google   us-east1   / us-east1-b  26260        8083
+  #   roach5  google   us-east1   / us-east1-c  26261        8084
+  #   roach6  google   us-east1   / us-east1-d  26262        8085
+  # ---------------------------------------------------------------------------
+
+  roach1:
+    image: cockroachdb/cockroach:latest-v25.2
+    hostname: roach1
+    container_name: roach1
+    networks:
+      - roachnet
+    ports:
+      - "26257:26257"   # host:container — SQL
+      - "8080:8080"     # host:container — Admin UI
+    volumes:
+      - ./data/roach1:/cockroach/cockroach-data
+      - ./sql:/cockroach/sql:ro
+    command: >
+      start
+      --advertise-addr=roach1:26357
+      --http-addr=roach1:8080
+      --listen-addr=roach1:26357
+      --sql-addr=roach1:26257
+      --insecure
+      --locality=CP=aws,region=af-south-1,zone=az1
+      --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
+
+  roach2:
+    image: cockroachdb/cockroach:latest-v25.2
+    hostname: roach2
+    container_name: roach2
+    networks:
+      - roachnet
+    ports:
+      - "26258:26257"   # host:container — SQL
+      - "8081:8080"     # host:container — Admin UI
+    volumes:
+      - ./data/roach2:/cockroach/cockroach-data
+      - ./sql:/cockroach/sql:ro
+    command: >
+      start
+      --advertise-addr=roach2:26357
+      --http-addr=roach2:8080
+      --listen-addr=roach2:26357
+      --sql-addr=roach2:26257
+      --insecure
+      --locality=CP=aws,region=af-south-1,zone=az2
+      --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
+
+  roach3:
+    image: cockroachdb/cockroach:latest-v25.2
+    hostname: roach3
+    container_name: roach3
+    networks:
+      - roachnet
+    ports:
+      - "26259:26257"   # host:container — SQL
+      - "8082:8080"     # host:container — Admin UI
+    volumes:
+      - ./data/roach3:/cockroach/cockroach-data
+      - ./sql:/cockroach/sql:ro
+    command: >
+      start
+      --advertise-addr=roach3:26357
+      --http-addr=roach3:8080
+      --listen-addr=roach3:26357
+      --sql-addr=roach3:26257
+      --insecure
+      --locality=CP=aws,region=af-south-1,zone=az3
+      --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
+
+  roach4:
+    image: cockroachdb/cockroach:latest-v25.2
+    hostname: roach4
+    container_name: roach4
+    networks:
+      - roachnet
+    ports:
+      - "26260:26257"   # host:container — SQL
+      - "8083:8080"     # host:container — Admin UI
+    volumes:
+      - ./data/roach4:/cockroach/cockroach-data
+      - ./sql:/cockroach/sql:ro
+    command: >
+      start
+      --advertise-addr=roach4:26357
+      --http-addr=roach4:8080
+      --listen-addr=roach4:26357
+      --sql-addr=roach4:26257
+      --insecure
+      --locality=CP=google,region=us-east1,zone=us-east1-b
+      --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
+
+  roach5:
+    image: cockroachdb/cockroach:latest-v25.2
+    hostname: roach5
+    container_name: roach5
+    networks:
+      - roachnet
+    ports:
+      - "26261:26257"   # host:container — SQL
+      - "8084:8080"     # host:container — Admin UI
+    volumes:
+      - ./data/roach5:/cockroach/cockroach-data
+      - ./sql:/cockroach/sql:ro
+    command: >
+      start
+      --advertise-addr=roach5:26357
+      --http-addr=roach5:8080
+      --listen-addr=roach5:26357
+      --sql-addr=roach5:26257
+      --insecure
+      --locality=CP=google,region=us-east1,zone=us-east1-c
+      --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
+
+  roach6:
+    image: cockroachdb/cockroach:latest-v25.2
+    hostname: roach6
+    container_name: roach6
+    networks:
+      - roachnet
+    ports:
+      - "26262:26257"   # host:container — SQL
+      - "8085:8080"     # host:container — Admin UI
+    volumes:
+      - ./data/roach6:/cockroach/cockroach-data
+      - ./sql:/cockroach/sql:ro
+    command: >
+      start
+      --advertise-addr=roach6:26357
+      --http-addr=roach6:8080
+      --listen-addr=roach6:26357
+      --sql-addr=roach6:26257
+      --insecure
+      --locality=CP=google,region=us-east1,zone=us-east1-d
+      --join=roach1:26357,roach2:26357,roach3:26357,roach4:26357,roach5:26357,roach6:26357
+
+  # ---------------------------------------------------------------------------
+  # roach-init — Bootstraps the cluster in three ordered steps:
+  #   1. cockroach init   — forms the cluster (idempotent)
+  #   2. init-zone.sql    — sets replication zone constraints (CP=aws / CP=huawei)
+  #   3. init_sh.sql      — Initialises Database, this calls init_db.sql
+  #
+  # Steps 2 & 3 use a retry loop so the SQL listener is definitely ready
+  # before we attempt to connect.
+  # ---------------------------------------------------------------------------
+  roach-init:
+    image: cockroachdb/cockroach:latest-v25.2
+    container_name: roach-init
+    networks:
+      - roachnet
+    depends_on:
+      - roach1
+      - roach2
+      - roach3
+      - roach4
+      - roach5
+      - roach6
+    restart: "no"
+    volumes:
+      - ./sql:/cockroach/sql:ro
+    entrypoint: ["/bin/sh", "/cockroach/sql/init_db.sh"]
+
+  # ---------------------------------------------------------------------------
+  # HAProxy — load balancer in front of all SQL nodes
+  # HAProxy connects to nodes via internal Docker network using port 26257
+  # ---------------------------------------------------------------------------
+
+  haproxy:
+    image: haproxy:latest
+    hostname: haproxy
+    container_name: haproxy
+    networks:
+      - roachnet
+    ports:
+      - "26000:26000"   # SQL entrypoint    → point pgAdmin / clients here
+      - "8888:8888"     # HAProxy stats UI  → http://localhost:8888/stats
+    volumes:
+      - ./conf/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - roach1
+      - roach2
+      - roach3
+      - roach4
+      - roach5
+      - roach6
+
+networks:
+  roachnet:
+    driver: bridge
