@@ -222,9 +222,9 @@ Node 1
 Node 2
 `--locality=rack=2`
 Node 3
-`--locality=rack=4`
+`--locality=rack=3`
 Node 4
-`--locality=rack=5`
+`--locality=rack=4`
 
 And now we configure our cluster, This is the easy version, ;) we simply configure it with num_replicas=3. This will drive a even distribution of our data across our 4 nodes in the 4 racks, as we build out our data set.
 
