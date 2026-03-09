@@ -142,14 +142,16 @@ In this circumstance if we only specified replication factor of 3 as per above e
 
 For our 9 node cluster in our 3 racks, we now additionally specify `--locality=` for each node.
 
-- For Nodes 1, 4 and 7
-`--locality=rack=1`
+```
+# For Nodes 1, 4 and 7
+--locality=rack=1
 
-- For Nodes 2, 5 and 8
-`--locality=rack=2`
+# For Nodes 2, 5 and 8
+--locality=rack=2
 
-- For Nodes 3, 6 and 9
-`--locality=rack=3`
+# For Nodes 3, 6 and 9
+--locality=rack=3
+```
 
 **Our nodes definitions would look something like:**
 
@@ -272,10 +274,10 @@ Our 6 nodes are now onfigured as:
 - For AWS - az1 located nodes
 `--locality=CP=aws,region=af-south-1,zone=az1`
 
-- For AWS - az2 located odes
+- For AWS - az2 located nodes
 `--locality=CP=aws,region=af-south-1,zone=az2`
 
-- For AWS - az3 locatednodes
+- For AWS - az3 located nodes
 `--locality=CP=aws,region=af-south-1,zone=az3`
 
 - For Google - africa-south1-a located nodes
@@ -477,20 +479,16 @@ make crsql
 
 ```sql
 SELECT * FROM crdb_internal.gossip_nodes;
-                                                
-  node_id | network |   address    | advertise_address | sql_network | sql_address  | advertise_sql_address | attrs |                 locality                  | cluster_name | server_version | build_tag |         started_at         | is_live | ranges | leases
-----------+---------+--------------+-------------------+-------------+--------------+-----------------------+-------+-------------------------------------------+--------------+----------------+-----------+----------------------------+---------+--------+---------
-        1 | tcp     | roach1:26357 | roach1:26357      | tcp         | roach1:26257 | roach1:26257          | []    | rack=1    |              | 25.2           | v25.2.13  | 2026-03-08 14:47:36.808961 |    t    |     62 |     14
-        2 | tcp     | roach2:26357 | roach2:26357      | tcp         | roach2:26257 | roach2:26257          | []    | rack=2    |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.760356 |    t    |     62 |     13
-        3 | tcp     | roach4:26357 | roach4:26357      | tcp         | roach4:26257 | roach4:26257          | []    | rack=3    |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.766291 |    t    |     61 |     12
-        4 | tcp     | roach3:26357 | roach3:26357      | tcp         | roach3:26257 | roach3:26257          | []    | rack=1    |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.766723 |    t    |     63 |     14
-        5 | tcp     | roach5:26357 | roach5:26357      | tcp         | roach5:26257 | roach5:26257          | []    | rack=2    |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.771678 |    t    |     61 |     11
-        6 | tcp     | roach6:26357 | roach6:26357      | tcp         | roach6:26257 | roach6:26257          | []    | rack=3    |              | 25.2           | v25.2.13  | 2026-03-08 14:47:38.771079 |    t    |     61 |     12
+  node_id | network |   address    | advertise_address | sql_network | sql_address  | advertise_sql_address | attrs | locality | cluster_name | server_version | build_tag |         started_at         | is_live | ranges | leases
+----------+---------+--------------+-------------------+-------------+--------------+-----------------------+-------+----------+--------------+----------------+-----------+----------------------------+---------+--------+---------
+        1 | tcp     | roach1:26357 | roach1:26357      | tcp         | roach1:26257 | roach1:26257          | []    | rack=1   |              | 25.2           | v25.2.13  | 2026-03-09 05:46:26.236919 |    t    |     60 |     15
+        2 | tcp     | roach4:26357 | roach4:26357      | tcp         | roach4:26257 | roach4:26257          | []    | rack=1   |              | 25.2           | v25.2.13  | 2026-03-09 05:46:26.575023 |    t    |     61 |     13
+        3 | tcp     | roach2:26357 | roach2:26357      | tcp         | roach2:26257 | roach2:26257          | []    | rack=2   |              | 25.2           | v25.2.13  | 2026-03-09 05:46:26.768931 |    t    |     58 |     11
+        4 | tcp     | roach6:26357 | roach6:26357      | tcp         | roach6:26257 | roach6:26257          | []    | rack=3   |              | 25.2           | v25.2.13  | 2026-03-09 05:46:26.86993  |    t    |     59 |     10
+        5 | tcp     | roach3:26357 | roach3:26357      | tcp         | roach3:26257 | roach3:26257          | []    | rack=3   |              | 25.2           | v25.2.13  | 2026-03-09 05:46:27.473074 |    t    |     61 |     12
+        6 | tcp     | roach5:26357 | roach5:26357      | tcp         | roach5:26257 | roach5:26257          | []    | rack=2   |              | 25.2           | v25.2.13  | 2026-03-09 05:46:27.892448 |    t    |     61 |     13
 (6 rows)
 
-Time: 3ms total (execution 2ms / network 1ms)
-
-root@roach1:26257/demog>   
 ```
 
 **Results in a Cluster:**
