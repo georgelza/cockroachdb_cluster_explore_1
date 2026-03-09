@@ -154,7 +154,7 @@ services:
   # ---------------------------------------------------------------------------
   # roach-init — Bootstraps the cluster in three ordered steps:
   #   1. cockroach init   — forms the cluster (idempotent)
-  #   2. init-zone.sql    — sets replication zone constraints (CP=aws / CP=huawei)
+  #   2. init-zone.sql    — sets replication zone constraints (CP=aws / CP=google)
   #   3. init_sh.sql      — Initialises Database, this calls init_db.sql
   #
   # Steps 2 & 3 use a retry loop so the SQL listener is definitely ready
